@@ -53,6 +53,8 @@ if(params.test){
 
   if(params.test == "paired"){
 
+    println "Testing with: ${projectDir}/data/test/sample.pe.csv"
+
     Channel
       .fromPath("${projectDir}/data/test/sample.pe.csv")
       .set { pe_test_csv}
@@ -79,6 +81,9 @@ if(params.test){
   }
 
   if(params.test == "single"){
+
+   println "Testing with: ${projectDir}/data/test/sample.se.csv"
+
     Channel
       .fromPath("${projectDir}/data/test/sample.se.csv")
       .set { se_test_csv}

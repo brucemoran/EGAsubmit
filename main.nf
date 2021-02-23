@@ -53,7 +53,7 @@ if(params.test){
       .fromPath("${projectDir}/data/test/sample.pe.csv", type: 'file')
       .set { pe_test_csv}
 
-    process test_se_setup {
+    process test_pe_setup {
 
       input:
       file(csv) from pe_test_csv

@@ -232,3 +232,35 @@ process regs_csv {
   done
   """
 }
+
+//Completion e-mail notification
+
+workflow.onComplete {
+  sleep(100000)
+  def subject = """\
+    [brucemoran/EGAsubmit] SUCCESS: $params.runID [$workflow.runName]
+    """
+    .stripIndent()
+  if (!workflow.success) {
+      subject = """\
+        [brucemoran/EGAsubmit] FAILURE: $params.runID [$workflow.runName]
+        """
+        .stripIndent()
+  }
+
+  def msg = """\
+    Pipeline execution summary
+    ---------------------------
+    RunID       : ${params.runID}
+    RunName     : ${workflow.runName}
+    Completed at: ${workflow.complete}
+    Duration    : ${workflow.duration}
+    workDir     : ${workflow.workDir}
+    exit status : ${workflow.exitStatus}
+    """
+    .stripIndent()
+
+  sendMail(to: "${params.email}",
+           subject: subject,
+           body: msg)
+}

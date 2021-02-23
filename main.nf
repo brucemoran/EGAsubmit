@@ -53,7 +53,7 @@ if(params.test){
   if(params.test == "paired"){
 
     Channel
-      .fromPath("${projectDir}/data/test/sample.pe.csv", type: 'file')
+      .fromPath("${projectDir}/data/test/sample.pe.csv")
       .set { pe_test_csv}
 
     process test_pe_setup {
@@ -79,7 +79,7 @@ if(params.test){
 
   if(params.test == "single"){
     Channel
-      .fromPath("${projectDir}/data/test/sample.se.csv", type: 'file')
+      .fromPath("${projectDir}/data/test/sample.se.csv")
       .set { se_test_csv}
 
     process test_se_setup {

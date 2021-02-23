@@ -47,6 +47,9 @@ if(!params.test){
 
 //testing
 if(params.test){
+
+  params.outDir = "EGAsubmit_test_${params.test}"
+
   if(params.test == "paired"){
 
     Channel
@@ -54,6 +57,8 @@ if(params.test){
       .set { pe_test_csv}
 
     process test_pe_setup {
+
+      publishDir path: "${params.outDir}", mode: "copy"
 
       input:
       file(csv) from pe_test_csv
@@ -67,7 +72,7 @@ if(params.test){
       """
     }
 
-    params.sampleCsv = start_test
+    params.sampleCsv = "${params.outDir}/sampleCsv.pe.csv"
     params.fastqType = "paired"
 
   }
@@ -78,6 +83,8 @@ if(params.test){
       .set { se_test_csv}
 
     process test_se_setup {
+
+      publishDir path: "${params.outDir}", mode: "copy"
 
       input:
       file(csv) from se_test_csv
@@ -91,13 +98,10 @@ if(params.test){
       """
     }
 
-    params.sampleCsv = start_test
+    params.sampleCsv = "${params.outDir}/sampleCsv.se.csv"
     params.fastqType = "single"
 
   }
-
-  params.outDir = "EGAsubmit_test_${params.test}"
-
 }
 
 // 0.00: Input using sample.csv, EGAcryptor

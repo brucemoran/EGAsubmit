@@ -48,7 +48,7 @@ if(!params.test){
 //testing
 if(params.test){
 
-  println { "We are in test mode!" }
+  println "We are in test mode!"
   params.outDir = "EGAsubmit_test_${params.test}"
 
   if(params.test == "paired"){

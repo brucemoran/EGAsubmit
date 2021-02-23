@@ -1,1 +1,1 @@
-###EGAsubmit: helper Nextflow for EGA submission
+# EGAsubmit: helper Nextflow for EGA submission

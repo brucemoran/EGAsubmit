@@ -49,40 +49,32 @@ if(!params.test){
 if(params.test){
 
   println "We are in test mode!"
+
   params.outDir = "EGAsubmit_test_${params.test}"
 
   if(params.test == "paired"){
 
-    println "Testing with: ${projectDir}/data/test/sample.pe.csv"
-
-    Channel
-      .fromPath("${projectDir}/data/test/sample.pe.csv")
-      .set { pe_test_csv}
-
     process test_pe_setup {
 
       publishDir path: "${params.outDir}", mode: "copy"
+      echo true
 
       input:
-      file(csv) from pe_test_csv
+      file(csv) from Channel.fromPath("${projectDir}/data/test/sample.pe.csv")
 
       output:
-      file("sampleCsv.pe.csv") into start_test
+      file("sample_pe.test.csv") into start_test
 
       script:
       """
-      sed 's#path#${projectDir}/data/test/#g' ${csv} > sampleCsv.pe.csv
+      sed 's#path#${projectDir}/data/test/#g' ${csv} > sample_pe.test.csv
+      echo -e "Run:\\nnextflow run brucemoran/EGAsubmit --sampleCsv ${params.outDir}/sample_pe.test.csv"
       """
     }
-
-    params.sampleCsv = "${params.outDir}/sampleCsv.pe.csv"
-    params.fastqType = "paired"
 
   }
 
   if(params.test == "single"){
-
-   println "Testing with: ${projectDir}/data/test/sample.se.csv"
 
     Channel
       .fromPath("${projectDir}/data/test/sample.se.csv")
@@ -91,182 +83,184 @@ if(params.test){
     process test_se_setup {
 
       publishDir path: "${params.outDir}", mode: "copy"
+      echo true
 
       input:
       file(csv) from se_test_csv
 
       output:
-      file("sampleCsv.se.csv") into start_test
+      file("sample_se.test.csv") into start_test
 
       script:
       """
-      sed 's#path#${projectDir}/data/test/#g' ${csv} > sampleCsv.se.csv
+      sed 's#path#${projectDir}/data/test/#g' ${csv} > sample_se.test.csv
+      echo -e "Run:\\nnextflow run brucemoran/EGAsubmit --sampleCsv ${params.outDir}/sample_se.test.csv --fastqType single"
       """
     }
-
-    params.sampleCsv = "${params.outDir}/sampleCsv.se.csv"
-    params.fastqType = "single"
-
   }
 }
 
 // 0.00: Input using sample.csv, EGAcryptor
-if(params.fastqType == "paired"){
-  Channel.fromPath("${params.sampleCsv}")
-         .splitCsv( header: true )
-         .map { row -> [row.sampleID, file(row.read1), file(row.read2)] }
-         .set { egac }
+if(params.sampleCsv){
+  if(params.fastqType == "paired"){
 
-  process egacrypt_pe {
+    Channel.fromPath("${params.sampleCsv}")
+           .splitCsv( header: true )
+           .map { row -> [row.sampleID, file(row.read1), file(row.read2)] }
+           .set { egac }
 
-    label 'low_mem'
-    publishDir path: "${params.outDir}/EGAcrypted", mode: "copy"
+    process egacrypt_pe {
 
-    input:
-    tuple val(sampleID), file(read1), file(read2) from egac
+      label 'low_mem'
+      publishDir path: "${params.outDir}/EGAcrypted", mode: "copy", pattern: "*[!csv]"
 
-    output:
-    tuple val(sampleID), file("${read1}.gpg"), file("${read1}.gpg.md5"), file("${read1}.md5"),
-    file("${read2}.gpg"), file("${read2}.gpg.md5"), file("${read2}.md5") into files_out
-    tuple val(sampleID), file("${sampleID}.reg.csv") into reg_csv
-    tuple val(sampleID), file("${sampleID}.lnk.csv") into lnk_csv
+      input:
+      tuple val(sampleID), file(read1), file(read2) from egac
 
-    script:
-    def taskmem = task.memory == null ? "" : "-Xmx" + javaTaskmem("${task.memory}")
-    """
-    java ${taskmem} -jar /usr/local/jar/EGAcryptor.jar \
-      -i "${read1},${read2}"
+      output:
+      tuple val(sampleID), file("${read1}.gpg"), file("${read1}.gpg.md5"), file("${read1}.md5"),
+      file("${read2}.gpg"), file("${read2}.gpg.md5"), file("${read2}.md5") into files_out
+      file("${sampleID}.reg.csv") into reg_csv
+      file("${sampleID}.lnk.csv") into lnk_csv
 
-    echo ",${sampleID},,${sampleID},,NA,unknown,,,," > ${sampleID}.reg.csv
+      script:
+      """
+      java -jar /usr/local/jar/EGAcryptor.jar \
+        -i "${read1},${read2}" \
+        -o ./
 
-    echo "${sampleID},${read1}.gpg,${read1}.gpg.md5,${read1}.md5,${read2}.gpg, ${read2}.gpg.md5,${read2}.md5" > ${sampleID}.lnk.csv
-    """
+      echo ",${sampleID},,${sampleID},,NA,unknown,,,," > ${sampleID}.reg.csv
+
+      echo "${sampleID},${read1}.gpg,${read1}.gpg.md5,${read1}.md5,${read2}.gpg, ${read2}.gpg.md5,${read2}.md5" > ${sampleID}.lnk.csv
+      """
+    }
+
+    //collect outputs from above together as need to make single CSV with all
+
+    process link_csv_pe {
+
+      label 'low_mem'
+      publishDir path: "${params.outDir}/CSVs", mode: "copy"
+
+      input:
+      file(lnks) from lnk_csv.collect()
+
+      output:
+      file("${params.runID}.link.csv")
+
+      script:
+      """
+      echo "Sample alias,First Fastq File,First Checksum,First Unencrypted checksum,Second Fastq File,Second Checksum,Second Unencrypted checksum" > ${params.runID}.link.csv
+      ls *lnk.csv | while read LNK; do
+        cat \$LNK >> ${params.runID}.link.csv
+      done
+      """
+    }
   }
 
-  //collect outputs from above together as need to make single CSV with all
+  if(params.fastqType == "single"){
+    Channel.fromPath("${params.sampleCsv}")
+           .splitCsv( header: true )
+           .map { row -> [row.sampleID, file(row.read1)] }
+           .set { egac }
 
-  process link_csv_pe {
+    process egacrypt_se {
+
+      label 'low_mem'
+      publishDir path: "${params.outDir}/EGAcrypted", mode: "copy", pattern: "*[!csv]"
+
+      input:
+      file(read1), file(read2) from egac
+
+      output:
+      tuple val(sampleID), file("${read1}.gpg"), file("${read1}.gpg.md5"), file("${read1}.md5") into files_out
+      file("${sampleID}.reg.csv") into reg_csv
+      file("${sampleID}.lnk.csv") into lnk_csv
+
+      script:
+      """
+      java -jar /usr/local/jar/EGAcryptor.jar \
+        -i "${read1}" \
+        -o ./
+
+      echo ",${sampleID},,${sampleID},,NA,unknown,,,," > ${sampleID}.reg.csv
+
+      echo "${sampleID},${read1}.gpg,${read1}.gpg.md5,${read1}.md5 > ${sampleID}.lnk.csv
+      """
+    }
+
+    //collect outputs from above together as need to make single CSV with all
+    process link_csv_se {
+
+      label 'low_mem'
+      publishDir path: "${params.outDir}/CSVs", mode: "copy"
+
+      input:
+      file(lnks) from lnk_csv.collect()
+
+      output:
+      file("${params.runID}.link.csv")
+
+      script:
+      """
+      echo "Sample alias,Fastq File,Checksum,Unencrypted checksum" > ${params.runID}.link.csv
+      ls *lnk.csv | while read LNK; do
+        cat \$LNK >> ${params.runID}.link.csv
+      done
+      """
+    }
+  }
+
+  process regs_csv {
 
     label 'low_mem'
     publishDir path: "${params.outDir}/CSVs", mode: "copy"
 
     input:
-    tuple val(sampleID), file(lnks) from lnk_csv.collect()
+    file("${sampleID}.reg.csv") from reg_csv.collect()
 
     output:
-    file("${params.runID}.link.csv")
+    file("${params.runID}.regs.csv")
 
     script:
     """
-    echo "Sample alias,First Fastq File,First Checksum,First Unencrypted checksum,Second Fastq File,Second Checksum,Second Unencrypted checksum" > ${params.runID}.link.csv
-    ls *lnk.csv | while read LNK; do
-      cat \$LNK >> ${params.runID}.link.csv
+    echo "title,alias,description,subjectId,bioSampleId,caseOrControl,gender,organismPart,cellLine	region,phenotype" > ${params.runID}.regs.csv
+    ls *reg.csv | while read REG; do
+      cat \$REG >> ${params.runID}.regs.csv
     done
     """
   }
-}
 
-if(params.fastqType == "single"){
-  Channel.fromPath("${params.sampleCsv}")
-         .splitCsv( header: true )
-         .map { row -> [row.sampleID, file(row.read1)] }
-         .set { egac }
-
-  process egacrypt_se {
-
-    label 'low_mem'
-    publishDir path: "${params.outDir}/EGAcrypted", mode: "copy"
-
-    input:
-    tuple val(sampleID), file(read1), file(read2) from egac
-
-    output:
-    tuple val(sampleID), file("${read1}.gpg"), file("${read1}.gpg.md5"), file("${read1}.md5") into files_out
-    tuple val(sampleID), file("${sampleID}.reg.csv") into reg_csv
-    tuple val(sampleID), file("${sampleID}.lnk.csv") into lnk_csv
-
-    script:
-    def taskmem = task.memory == null ? "" : "-Xmx" + javaTaskmem("${task.memory}")
-    """
-    java ${taskmem} -jar /usr/local/jar/EGAcryptor.jar \
-      -i "${read1},${read2}"
-
-    echo ",${sampleID},,${sampleID},,NA,unknown,,,," > ${sampleID}.reg.csv
-
-    echo "${sampleID},${read1}.gpg,${read1}.gpg.md5,${read1}.md5 > ${sampleID}.lnk.csv
-    """
-  }
-
-  //collect outputs from above together as need to make single CSV with all
-  process link_csv_se {
-
-    label 'low_mem'
-    publishDir path: "${params.outDir}/CSVs", mode: "copy"
-
-    input:
-    tuple val(sampleID), file(lnks) from lnk_csv.collect()
-
-    output:
-    file("${params.runID}.link.csv")
-
-    script:
-    """
-    echo "Sample alias,Fastq File,Checksum,Unencrypted checksum" > ${params.runID}.link.csv
-    ls *lnk.csv | while read LNK; do
-      cat \$LNK >> ${params.runID}.link.csv
-    done
-    """
-  }
-}
-
-process regs_csv {
-
-  label 'low_mem'
-  publishDir path: "${params.outDir}/CSVs", mode: "copy"
-
-  input:
-  tuple val(sampleID), file("${sampleID}.reg.csv") from reg_csv
-
-  output:
-  file("${params.runID}.regs.csv")
-
-  script:
-  """
-  echo "title,alias,description,subjectId,bioSampleId,caseOrControl,gender,organismPart,cellLine	region,phenotype" > ${params.runID}.regs.csv
-  ls *reg.csv | while read REG; do
-    cat \$REG >> ${params.runID}.regs.csv
-  done
-  """
-}
-
-//Completion e-mail notification
-
-workflow.onComplete {
-  sleep(100000)
-  def subject = """\
-    [brucemoran/EGAsubmit] SUCCESS: $params.runID [$workflow.runName]
-    """
-    .stripIndent()
-  if (!workflow.success) {
-      subject = """\
-        [brucemoran/EGAsubmit] FAILURE: $params.runID [$workflow.runName]
+  //Completion e-mail notification
+  if(params.email){
+    workflow.onComplete {
+      sleep(100000)
+      def subject = """\
+        [brucemoran/EGAsubmit] SUCCESS: $params.runID [$workflow.runName]
         """
         .stripIndent()
+      if (!workflow.success) {
+          subject = """\
+            [brucemoran/EGAsubmit] FAILURE: $params.runID [$workflow.runName]
+            """
+            .stripIndent()
+      }
+
+      def msg = """\
+        Pipeline execution summary
+        ---------------------------
+        RunID       : ${params.runID}
+        RunName     : ${workflow.runName}
+        Completed at: ${workflow.complete}
+        Duration    : ${workflow.duration}
+        workDir     : ${workflow.workDir}
+        exit status : ${workflow.exitStatus}
+        """
+        .stripIndent()
+
+      sendMail(to: "${params.email}",
+               subject: subject,
+               body: msg)
+    }
   }
-
-  def msg = """\
-    Pipeline execution summary
-    ---------------------------
-    RunID       : ${params.runID}
-    RunName     : ${workflow.runName}
-    Completed at: ${workflow.complete}
-    Duration    : ${workflow.duration}
-    workDir     : ${workflow.workDir}
-    exit status : ${workflow.exitStatus}
-    """
-    .stripIndent()
-
-  sendMail(to: "${params.email}",
-           subject: subject,
-           body: msg)
 }

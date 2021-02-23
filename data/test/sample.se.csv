@@ -1,5 +1,5 @@
 sampleID,read1
-t1,patht1.1.fastq
-t2,patht2.1.fastq
-t3,patht3.1.fastq
-t4,patht4.1.fastq
+t1,patht1.1.fastq.gz
+t2,patht2.1.fastq.gz
+t3,patht3.1.fastq.gz
+t4,patht4.1.fastq.gz

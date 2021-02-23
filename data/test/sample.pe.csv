@@ -1,1 +1,5 @@
 sampleID,read1,read2
+t1,patht1.1.fastq.gz,patht1.2.fastq.gz
+t2,patht2.1.fastq.gz,patht2.2.fastq.gz
+t3,patht3.1.fastq.gz,patht3.2.fastq.gz
+t4,patht4.1.fastq.gz,patht4.2.fastq.gz

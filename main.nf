@@ -95,6 +95,9 @@ if(params.test){
     params.fastqType = "single"
 
   }
+
+  params.outDir = "EGAsubmit_test_${params.test}"
+
 }
 
 // 0.00: Input using sample.csv, EGAcryptor

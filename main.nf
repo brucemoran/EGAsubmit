@@ -252,15 +252,15 @@ if(params.sampleCsv){
     script:
     if( params.egaBox && params.egaPass )
       """
-      echo "ASPERA_SCP_PASS=${params.egaPass} ascp -P33001  -O33001 -QT -l300M -L- ${params.outDir}/EGAcryptor/* ${params.egaBox}@fasp.ega.ebi.ac.uk:/." > ${params.runID}.aspera_upload_pass.sh
+      echo "ASPERA_SCP_PASS=${params.egaPass} ascp -P33001  -O33001 -QT -l300M -L- \$(realpath ${params.outDir})/EGAcrypted/* ${params.egaBox}@fasp.ega.ebi.ac.uk:/." > ${params.runID}.aspera_upload_pass.sh
       """
     else if( params.egaBox && !params.egaPass )
       """
-      echo "ascp -P33001 -O33001 -QT -l300M -L- ${params.outDir}/EGAcryptor/* ${params.egaBox}@fasp.ega.ebi.ac.uk:/." > ${params.runID}.aspera_upload_nopass.sh
+      echo "ascp -P33001 -O33001 -QT -l300M -L- \$(realpath ${params.outDir})/EGAcrypted/* ${params.egaBox}@fasp.ega.ebi.ac.uk:/." > ${params.runID}.aspera_upload_nopass.sh
       """
     else
       """
-      echo "ascp -P33001 -O33001 -QT -l300M -L- ${params.outDir}/EGAcryptor/* <your_ega_box_ID>@fasp.ega.ebi.ac.uk:/." > ${params.runID}.aspera_upload_nobox_nopass.sh
+      echo "ascp -P33001 -O33001 -QT -l300M -L- \$(realpath ${params.outDir})/EGAcrypted/* <your_ega_box_ID>@fasp.ega.ebi.ac.uk:/." > ${params.runID}.aspera_upload_nobox_nopass.sh
       """
   }
 

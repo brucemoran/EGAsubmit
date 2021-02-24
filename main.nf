@@ -224,7 +224,7 @@ if(params.sampleCsv){
 
     script:
     """
-    echo "title,alias,description,subjectId,bioSampleId,caseOrControl,gender,organismPart,cellLine	region,phenotype" > ${params.runID}.regs.csv
+    echo "title,alias,description,subjectId,bioSampleId,caseOrControl,gender,organismPart,cellLine,region,phenotype" > ${params.runID}.regs.csv
     ls *reg.csv | while read REG; do
       cat \$REG >> ${params.runID}.regs.csv
     done

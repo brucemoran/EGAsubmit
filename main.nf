@@ -217,7 +217,7 @@ if(params.sampleCsv){
     publishDir path: "${params.outDir}/CSVs", mode: "copy"
 
     input:
-    file("${sampleID}.reg.csv") from reg_csv.collect()
+    file(regs) from reg_csv.collect()
 
     output:
     file("${params.runID}.regs.csv")

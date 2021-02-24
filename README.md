@@ -12,12 +12,14 @@ The hardest part of EGA submission (to my novice eye) is EGAcryptor and linking 
 
 This seems like a task suited to Nextflow.
 
-We take input as a CSV indicating sampleID, /path/to/read1.fastq.gz, /path/to/read2.fastq.gz and use these as input to EGAcryptor and EGA-formatted CSV-generating processes.
+We take input as a CSV specifying sampleID and fastq file(s) and use these as input to EGAcryptor and EGA-formatted CSV-generating processes.
 
-These will then be output to the specified directories, leaving you a relatively straightforward clicky job in [the submitter portal](https://ega-archive.org/submitter-portal/)
+We also output a shell script to allow upload by users. This can also be run when parameter `upload` is specified.
+
+You will then be left with a relatively straightforward clicky job in [the submitter portal](https://ega-archive.org/submitter-portal/)
 
 ## Usage
-'''
+```
 nextflow run brucemoran/EGAsubmit -profile singularity
 
 Mandatory parameters:
@@ -38,18 +40,16 @@ Optional parameters:
 
   --egaPass       [str]       ega-box password
 
+  --upload        [bool]      Upload to egaBox? Requires egaBox and egaPass
+
   --email         [str]       Email address to send completion notification
 
   --test          [str]       Use test data, "single" or "paired"
-'''
+```
 
-## Output
+## Output and Uploading
 The output goes into the `runID` dir created in the dir you launch from.
 
-In `runID/` you will find dirs `CSVs` and `EGAcrypted`, and a shell script `*.sh`.
+In `runID/` you will find dirs `CSVs` and `EGAcrypted`, and a shell script `*.sh` based on your supplied egaBox, egaPass.
 
-If you gave your egaBox and egaPass credentials, the shell script can be run as-is and your data should upload to your box. This is the preferred option!
-
-If you gave the egaBox, again you can run the shell script. It will ask for your password, possibly for every file this is untested (if you have a egaBox then give egaPass too?!).
-
-If no egaBox or egaPass is given a template is printed.
+If you specify `upload` you will also trigger uploading of data to the egaBox specified. NB otherwise you can shell into the singularity container and upload from there if `aspera` is not installed on your system.

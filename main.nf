@@ -9,7 +9,7 @@ def helpMessage() {
 
     nextflow run brucemoran/EGAsubmit
 
-  Mandatory arguments:
+  Mandatory parameters:
 
     -profile        [str]       Configuration profile (required: singularity)
 
@@ -18,6 +18,12 @@ def helpMessage() {
     --runID         [str]       Name for run, used to tag output
 
     --fastqType     [str]       Either "single" or "paired" (default)
+
+  Optional parameters:
+
+    --egaBox        [str]       ega-box ID (e.g. ega_box_12345)
+
+    --egaPass       [str]       ega-box password
 
     --email         [str]       Email address to send completion notification
 
@@ -131,7 +137,7 @@ if(params.sampleCsv){
 
       echo ",${sampleID},,${sampleID},,NA,unknown,,,," > ${sampleID}.reg.csv
 
-      echo "${sampleID},${read1}.gpg,${read1}.gpg.md5,${read1}.md5,${read2}.gpg, ${read2}.gpg.md5,${read2}.md5" > ${sampleID}.lnk.csv
+      echo "${sampleID},${read1}.gpg,${read1}.gpg.md5,${read1}.md5,${read2}.gpg,${read2}.gpg.md5,${read2}.md5" > ${sampleID}.lnk.csv
       """
     }
 
@@ -150,7 +156,7 @@ if(params.sampleCsv){
 
       script:
       """
-      echo "Sample alias,First Fastq File,First Checksum,First Unencrypted checksum,Second Fastq File,Second Checksum,Second Unencrypted checksum" > ${params.runID}.link.csv
+      echo "'Sample alias','First Fastq File','First Checksum','First Unencrypted checksum','Second Fastq File','Second Checksum','Second Unencrypted checksum'" > ${params.runID}.link.csv
       ls *lnk.csv | while read LNK; do
         cat \$LNK >> ${params.runID}.link.csv
       done
@@ -185,7 +191,7 @@ if(params.sampleCsv){
 
       echo ",${sampleID},,${sampleID},,NA,unknown,,,," > ${sampleID}.reg.csv
 
-      echo "${sampleID},${read1}.gpg,${read1}.gpg.md5,${read1}.md5 > ${sampleID}.lnk.csv
+      echo "${sampleID},${read1}.gpg,${read1}.gpg.md5,${read1}.md5" > ${sampleID}.lnk.csv
       """
     }
 
@@ -203,7 +209,7 @@ if(params.sampleCsv){
 
       script:
       """
-      echo "Sample alias,Fastq File,Checksum,Unencrypted checksum" > ${params.runID}.link.csv
+      echo "'Sample alias','Fastq File','Checksum','Unencrypted checksum'" > ${params.runID}.link.csv
       ls *lnk.csv | while read LNK; do
         cat \$LNK >> ${params.runID}.link.csv
       done
@@ -220,7 +226,7 @@ if(params.sampleCsv){
     file(regs) from reg_csv.collect()
 
     output:
-    file("${params.runID}.regs.csv")
+    file("${params.runID}.regs.csv") into sh_script
 
     script:
     """
@@ -231,10 +237,37 @@ if(params.sampleCsv){
     """
   }
 
+  process sh_upload {
+
+    label 'low_mem'
+    executor 'local'
+    publishDir path: "${params.outDir}", mode: "copy"
+
+    input:
+    file(regs) from sh_script
+
+    output:
+    file("${params.runID}.*.sh") into sh_script_out
+
+    script:
+    if( params.egaBox && params.egaPass )
+      """
+      echo "ASPERA_SCP_PASS=${params.egaPass} ascp -P33001  -O33001 -QT -l300M -L- ${params.outDir}/EGAcryptor/* ${params.egaBox}@fasp.ega.ebi.ac.uk:/." > ${params.runID}.aspera_upload_pass.sh
+      """
+    else if( params.egaBox && !params.egaPass )
+      """
+      echo "ascp -P33001 -O33001 -QT -l300M -L- ${params.outDir}/EGAcryptor/* ${params.egaBox}@fasp.ega.ebi.ac.uk:/." > ${params.runID}.aspera_upload_nopass.sh
+      """
+    else
+      """
+      echo "ascp -P33001 -O33001 -QT -l300M -L- ${params.outDir}/EGAcryptor/* <your_ega_box_ID>@fasp.ega.ebi.ac.uk:/." > ${params.runID}.aspera_upload_nobox_nopass.sh
+      """
+  }
+
   //Completion e-mail notification
   if(params.email){
     workflow.onComplete {
-      sleep(100000)
+      sleep(1000)
       def subject = """\
         [brucemoran/EGAsubmit] SUCCESS: $params.runID [$workflow.runName]
         """

@@ -176,7 +176,7 @@ if(params.sampleCsv){
       publishDir path: "${params.outDir}/EGAcrypted", mode: "copy", pattern: "*[!csv]"
 
       input:
-      tuple val(sampleID), file(read1), file(read2) from egac
+      tuple val(sampleID), file(read1) from egac
 
       output:
       tuple val(sampleID), file("${read1}.gpg"), file("${read1}.gpg.md5"), file("${read1}.md5") into files_out

@@ -118,6 +118,7 @@ if(params.sampleCsv){
     process egacrypt_pe {
 
       label 'low_mem'
+      echo true
       publishDir path: "${params.outDir}/EGAcrypted", mode: "copy", pattern: "*[!csv]"
 
       input:
@@ -131,6 +132,9 @@ if(params.sampleCsv){
 
       script:
       """
+      echo ${sampleID}
+      echo ${read1}
+      echo ${read2}
       java -jar /usr/local/jar/EGAcryptor.jar \
         -i "${read1},${read2}" \
         -o ./

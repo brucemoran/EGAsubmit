@@ -118,7 +118,7 @@ if(params.sampleCsv){
     process egacrypt_pe {
 
       label 'low_mem'
-      echo true
+      debug true
       publishDir path: "${params.outDir}/EGAcrypted", mode: "copy", pattern: "*[!csv]"
 
       input:

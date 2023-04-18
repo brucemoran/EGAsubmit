@@ -112,8 +112,8 @@ if(params.sampleCsv){
 
     Channel.fromPath("${params.sampleCsv}")
            .splitCsv( header: true )
-           .map { row -> [row.sampleID, file(row.read1), file(row.read2)] }
-           .set { egac }
+           .view { row -> [row.sampleID, file(row.read1), file(row.read2)] }
+           //.set { egac }
 
     process egacrypt_pe {
 

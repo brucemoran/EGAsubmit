@@ -156,193 +156,188 @@ if(params.sampleCat){
 
 // 0.00: Input using sample.csv, EGAcryptor
 if(params.sampleCsv){
-  if(params.fastqType == "paired"){
+  Channel.fromPath("${params.sampleCsv}")
+         .splitCsv( header: true )
+         .map { row -> [row.sampleID, file(row.read1), file(row.read2)] }
+         .set { egac }
+}
 
-    Channel.fromPath("${params.sampleCsv}")
-           .splitCsv( header: true )
-           .map { row -> [row.sampleID, file(row.read1), file(row.read2)] }
-           .set { egac }
+if(params.fastqType == "paired"){
+  process Egacrypt_pe {
 
-    process Egacrypt_pe {
+    label 'low_mem'
+    debug true
+    publishDir path: "${params.outDir}/EGAcrypted", mode: "copy", pattern: "*[!csv]"
 
-      label 'low_mem'
-      debug true
-      publishDir path: "${params.outDir}/EGAcrypted", mode: "copy", pattern: "*[!csv]"
+    input:
+    tuple val(sampleID), file(read1), file(read2) from egac
 
-      input:
-      tuple val(sampleID), file(read1), file(read2) from egac
+    output:
+    tuple val(sampleID), file("${read1}.gpg"), file("${read1}.gpg.md5"), file("${read1}.md5"),
+    file("${read2}.gpg"), file("${read2}.gpg.md5"), file("${read2}.md5") into files_out
+    file("${sampleID}.reg.csv") into reg_csv
+    file("${sampleID}.lnk.csv") into lnk_csv
 
-      output:
-      tuple val(sampleID), file("${read1}.gpg"), file("${read1}.gpg.md5"), file("${read1}.md5"),
-      file("${read2}.gpg"), file("${read2}.gpg.md5"), file("${read2}.md5") into files_out
-      file("${sampleID}.reg.csv") into reg_csv
-      file("${sampleID}.lnk.csv") into lnk_csv
+    script:
+    """
+    java -jar /usr/local/jar/EGAcryptor.jar \
+      -i "${read1},${read2}" \
+      -o ./
 
-      script:
-      """
-      java -jar /usr/local/jar/EGAcryptor.jar \
-        -i "${read1},${read2}" \
-        -o ./
+    echo ",${sampleID},,${sampleID},,NA,unknown,,,," > ${sampleID}.reg.csv
 
-      echo ",${sampleID},,${sampleID},,NA,unknown,,,," > ${sampleID}.reg.csv
-
-      echo "${sampleID},${read1}.gpg,${read1}.gpg.md5,${read1}.md5,${read2}.gpg,${read2}.gpg.md5,${read2}.md5" > ${sampleID}.lnk.csv
-      """
-    }
-
-    //collect outputs from above together as need to make single CSV with all
-
-    process Link_csv_pe {
-
-      label 'low_mem'
-      publishDir path: "${params.outDir}/CSVs", mode: "copy"
-
-      input:
-      file(lnks) from lnk_csv.collect()
-
-      output:
-      file("${params.runID}.link.csv")
-
-      script:
-      """
-      echo "'Sample alias','First Fastq File','First Checksum','First Unencrypted checksum','Second Fastq File','Second Checksum','Second Unencrypted checksum'" > ${params.runID}.link.csv
-      ls *lnk.csv | while read LNK; do
-        cat \$LNK >> ${params.runID}.link.csv
-      done
-      """
-    }
+    echo "${sampleID},${read1}.gpg,${read1}.gpg.md5,${read1}.md5,${read2}.gpg,${read2}.gpg.md5,${read2}.md5" > ${sampleID}.lnk.csv
+    """
   }
 
-  if(params.fastqType == "single"){
-    Channel.fromPath("${params.sampleCsv}")
-           .splitCsv( header: true )
-           .map { row -> [row.sampleID, file(row.read1)] }
-           .set { egac }
+  //collect outputs from above together as need to make single CSV with all
 
-    process Egacrypt_se {
-
-      label 'low_mem'
-      publishDir path: "${params.outDir}/EGAcrypted", mode: "copy", pattern: "*[!csv]"
-
-      input:
-      tuple val(sampleID), file(read1) from egac
-
-      output:
-      tuple val(sampleID), file("${read1}.gpg"), file("${read1}.gpg.md5"), file("${read1}.md5") into files_out
-      file("${sampleID}.reg.csv") into reg_csv
-      file("${sampleID}.lnk.csv") into lnk_csv
-
-      script:
-      """
-      java -jar /usr/local/jar/EGAcryptor.jar \
-        -i "${read1}" \
-        -o ./
-
-      echo ",${sampleID},,${sampleID},,NA,unknown,,,," > ${sampleID}.reg.csv
-
-      echo "${sampleID},${read1}.gpg,${read1}.gpg.md5,${read1}.md5" > ${sampleID}.lnk.csv
-      """
-    }
-
-    //collect outputs from above together as need to make single CSV with all
-    process Link_csv_se {
-
-      label 'low_mem'
-      publishDir path: "${params.outDir}/CSVs", mode: "copy"
-
-      input:
-      file(lnks) from lnk_csv.collect()
-
-      output:
-      file("${params.runID}.link.csv")
-
-      script:
-      """
-      echo "'Sample alias','Fastq File','Checksum','Unencrypted checksum'" > ${params.runID}.link.csv
-      ls *lnk.csv | while read LNK; do
-        cat \$LNK >> ${params.runID}.link.csv
-      done
-      """
-    }
-  }
-
-  process Regs_csv {
+  process Link_csv_pe {
 
     label 'low_mem'
     publishDir path: "${params.outDir}/CSVs", mode: "copy"
 
     input:
-    file(regs) from reg_csv.collect()
+    file(lnks) from lnk_csv.collect()
 
     output:
-    file("${params.runID}.regs.csv") into sh_script
+    file("${params.runID}.link.csv")
 
     script:
     """
-    echo "title,alias,description,subjectId,bioSampleId,caseOrControl,gender,organismPart,cellLine,region,phenotype" > ${params.runID}.regs.csv
-    ls *reg.csv | while read REG; do
-      cat \$REG >> ${params.runID}.regs.csv
+    echo "'Sample alias','First Fastq File','First Checksum','First Unencrypted checksum','Second Fastq File','Second Checksum','Second Unencrypted checksum'" > ${params.runID}.link.csv
+    ls *lnk.csv | while read LNK; do
+      cat \$LNK >> ${params.runID}.link.csv
     done
     """
   }
+}
 
-  process Sh_upload {
+if(params.fastqType == "single"){
+
+  process Egacrypt_se {
 
     label 'low_mem'
-    executor 'local'
-    publishDir path: "${params.outDir}", mode: "copy"
+    publishDir path: "${params.outDir}/EGAcrypted", mode: "copy", pattern: "*[!csv]"
 
     input:
-    file(regs) from sh_script
+    tuple val(sampleID), file(read1) from egac
 
     output:
-    file("${params.runID}.*.sh") into sh_script_out
+    tuple val(sampleID), file("${read1}.gpg"), file("${read1}.gpg.md5"), file("${read1}.md5") into files_out
+    file("${sampleID}.reg.csv") into reg_csv
+    file("${sampleID}.lnk.csv") into lnk_csv
 
     script:
-    if( params.egaBox && params.egaPass )
-      """
-      echo "ASPERA_SCP_PASS=${params.egaPass} ascp -P33001  -O33001 -QT -l300M -L- \$(realpath ../../../${params.outDir})/EGAcrypted/* ${params.egaBox}@fasp.ega.ebi.ac.uk:/." > ${params.runID}.aspera_upload_pass.sh
-      """
-    else if( params.egaBox && !params.egaPass )
-      """
-      echo "ascp -P33001 -O33001 -QT -l300M -L- \$(realpath ../../../${params.outDir})/EGAcrypted/* ${params.egaBox}@fasp.ega.ebi.ac.uk:/." > ${params.runID}.aspera_upload_nopass.sh
-      """
-    else
-      """
-      echo "ascp -P33001 -O33001 -QT -l300M -L- \$(realpath ../../../${params.outDir})/EGAcrypted/* <your_ega_box_ID>@fasp.ega.ebi.ac.uk:/." > ${params.runID}.aspera_upload_nobox_nopass.sh
-      """
+    """
+    java -jar /usr/local/jar/EGAcryptor.jar \
+      -i "${read1}" \
+      -o ./
+
+    echo ",${sampleID},,${sampleID},,NA,unknown,,,," > ${sampleID}.reg.csv
+
+    echo "${sampleID},${read1}.gpg,${read1}.gpg.md5,${read1}.md5" > ${sampleID}.lnk.csv
+    """
   }
 
-  //Completion e-mail notification
-  if(params.email){
-    workflow.onComplete {
-      sleep(1000)
-      def subject = """\
-        [brucemoran/EGAsubmit] SUCCESS: $params.runID [$workflow.runName]
-        """
-        .stripIndent()
-      if (!workflow.success) {
-          subject = """\
-            [brucemoran/EGAsubmit] FAILURE: $params.runID [$workflow.runName]
-            """
-            .stripIndent()
-      }
+  //collect outputs from above together as need to make single CSV with all
+  process Link_csv_se {
 
-      def msg = """\
-        Pipeline execution summary
-        ---------------------------
-        RunID       : ${params.runID}
-        RunName     : ${workflow.runName}
-        Completed at: ${workflow.complete}
-        Duration    : ${workflow.duration}
-        workDir     : ${workflow.workDir}
-        exit status : ${workflow.exitStatus}
-        """
-        .stripIndent()
+    label 'low_mem'
+    publishDir path: "${params.outDir}/CSVs", mode: "copy"
 
-      sendMail(to: "${params.email}",
-               subject: subject,
-               body: msg)
+    input:
+    file(lnks) from lnk_csv.collect()
+
+    output:
+    file("${params.runID}.link.csv")
+
+    script:
+    """
+    echo "'Sample alias','Fastq File','Checksum','Unencrypted checksum'" > ${params.runID}.link.csv
+    ls *lnk.csv | while read LNK; do
+      cat \$LNK >> ${params.runID}.link.csv
+    done
+    """
+  }
+}
+
+process Regs_csv {
+
+  label 'low_mem'
+  publishDir path: "${params.outDir}/CSVs", mode: "copy"
+
+  input:
+  file(regs) from reg_csv.collect()
+
+  output:
+  file("${params.runID}.regs.csv") into sh_script
+
+  script:
+  """
+  echo "title,alias,description,subjectId,bioSampleId,caseOrControl,gender,organismPart,cellLine,region,phenotype" > ${params.runID}.regs.csv
+  ls *reg.csv | while read REG; do
+    cat \$REG >> ${params.runID}.regs.csv
+  done
+  """
+}
+
+process Sh_upload {
+
+  label 'low_mem'
+  executor 'local'
+  publishDir path: "${params.outDir}", mode: "copy"
+
+  input:
+  file(regs) from sh_script
+
+  output:
+  file("${params.runID}.*.sh") into sh_script_out
+
+  script:
+  if( params.egaBox && params.egaPass )
+    """
+    echo "ASPERA_SCP_PASS=${params.egaPass} ascp -P33001  -O33001 -QT -l300M -L- \$(realpath ../../../${params.outDir})/EGAcrypted/* ${params.egaBox}@fasp.ega.ebi.ac.uk:/." > ${params.runID}.aspera_upload_pass.sh
+    """
+  else if( params.egaBox && !params.egaPass )
+    """
+    echo "ascp -P33001 -O33001 -QT -l300M -L- \$(realpath ../../../${params.outDir})/EGAcrypted/* ${params.egaBox}@fasp.ega.ebi.ac.uk:/." > ${params.runID}.aspera_upload_nopass.sh
+    """
+  else
+    """
+    echo "ascp -P33001 -O33001 -QT -l300M -L- \$(realpath ../../../${params.outDir})/EGAcrypted/* <your_ega_box_ID>@fasp.ega.ebi.ac.uk:/." > ${params.runID}.aspera_upload_nobox_nopass.sh
+    """
+}
+
+//Completion e-mail notification
+if(params.email){
+  workflow.onComplete {
+    sleep(1000)
+    def subject = """\
+      [brucemoran/EGAsubmit] SUCCESS: $params.runID [$workflow.runName]
+      """
+      .stripIndent()
+    if (!workflow.success) {
+        subject = """\
+          [brucemoran/EGAsubmit] FAILURE: $params.runID [$workflow.runName]
+          """
+          .stripIndent()
     }
+
+    def msg = """\
+      Pipeline execution summary
+      ---------------------------
+      RunID       : ${params.runID}
+      RunName     : ${workflow.runName}
+      Completed at: ${workflow.complete}
+      Duration    : ${workflow.duration}
+      workDir     : ${workflow.workDir}
+      exit status : ${workflow.exitStatus}
+      """
+      .stripIndent()
+
+    sendMail(to: "${params.email}",
+             subject: subject,
+             body: msg)
   }
 }

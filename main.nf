@@ -13,7 +13,20 @@ def helpMessage() {
 
     -profile        [str]       Configuration profile (required: singularity)
 
-    --sampleCsv     [file]      CSV format, headers: sampleID,read1,read2
+    --sampleCsv     [file]      CSV format, headers: sampleID,read1,read2;
+                                sampleID is a unique identifier (e.g. sample_1);
+                                read1, read2 are full paths to single gzipped fastqs
+                                (e.g. /path/to/sample_1/read_1.fastq.gz)
+
+    or
+
+    --sampleCat     [file]      CSV format, headers: sampleID,dir,ext;
+                                sampleID is a unique identifier (e.g. sample_1);
+                                dir specifies path to directory in which files to be catted
+                                (e.g. /path/to/sample_1)
+                                ext is the extension to pattern match for read1 fastqs,
+                                if a read2 exists add with a ';' and the pattern to match
+                                (e.g. _1.fastq.gz, or _1.fastq.gz;_2.fastq.gz)
 
     --runID         [str]       Name for run, used to tag output
 
@@ -106,6 +119,37 @@ if(params.test){
   }
 }
 
+//if we need to cat a sample together
+if(params.sampleCat){
+  Channel.fromPath("${params.sampleCat}")
+         .splitCsv( header: true )
+         .map { row -> [row.sampleID, row.dir, row.ext] }
+         .set { samplecating }
+
+  process Samplecat {
+
+    label 'low_mem'
+    publishDir "${params.outdir}/samples/${sampleID}/cat", mode: "copy"
+
+    input:
+    tuple val(sampleID), val(dir), val(ext) from samplecating
+
+    output:
+    tuple val(sampleID), file(read1), file(read2) into egac
+
+    script:
+    rd1ext = "${ext}".split(';')[0]
+    rd2ext = "${ext}".split(';')[1]
+    read1 = "${sampleID}.R1.fastq.gz"
+    read2 = "${sampleID}.R2.fastq.gz"
+    """
+    #! bash
+    cat \$(find ${dir} | grep ${rd1ext} | sort) > ${read1}
+    cat \$(find ${dir} | grep ${rd2ext} | sort) > ${read2}
+    """
+  }
+}
+
 // 0.00: Input using sample.csv, EGAcryptor
 if(params.sampleCsv){
   if(params.fastqType == "paired"){
@@ -115,7 +159,7 @@ if(params.sampleCsv){
            .map { row -> [row.sampleID, file(row.read1), file(row.read2)] }
            .set { egac }
 
-    process egacrypt_pe {
+    process Egacrypt_pe {
 
       label 'low_mem'
       debug true
@@ -132,9 +176,6 @@ if(params.sampleCsv){
 
       script:
       """
-      echo ${sampleID}
-      echo ${read1}
-      echo ${read2}
       java -jar /usr/local/jar/EGAcryptor.jar \
         -i "${read1},${read2}" \
         -o ./
@@ -147,7 +188,7 @@ if(params.sampleCsv){
 
     //collect outputs from above together as need to make single CSV with all
 
-    process link_csv_pe {
+    process Link_csv_pe {
 
       label 'low_mem'
       publishDir path: "${params.outDir}/CSVs", mode: "copy"
@@ -174,7 +215,7 @@ if(params.sampleCsv){
            .map { row -> [row.sampleID, file(row.read1)] }
            .set { egac }
 
-    process egacrypt_se {
+    process Egacrypt_se {
 
       label 'low_mem'
       publishDir path: "${params.outDir}/EGAcrypted", mode: "copy", pattern: "*[!csv]"
@@ -200,7 +241,7 @@ if(params.sampleCsv){
     }
 
     //collect outputs from above together as need to make single CSV with all
-    process link_csv_se {
+    process Link_csv_se {
 
       label 'low_mem'
       publishDir path: "${params.outDir}/CSVs", mode: "copy"
@@ -221,7 +262,7 @@ if(params.sampleCsv){
     }
   }
 
-  process regs_csv {
+  process Regs_csv {
 
     label 'low_mem'
     publishDir path: "${params.outDir}/CSVs", mode: "copy"
@@ -241,7 +282,7 @@ if(params.sampleCsv){
     """
   }
 
-  process sh_upload {
+  process Sh_upload {
 
     label 'low_mem'
     executor 'local'

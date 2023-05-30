@@ -28,7 +28,7 @@ def helpMessage() {
                                 if a read2 exists add with a ';' and the pattern to match
                                 (e.g. _1.fastq.gz, or _1.fastq.gz;_2.fastq.gz)
 
-    --runID         [str]       Name for run, used to tag output
+    --experiment    [str]       Run name, as per 'experiment' in EGA, used to tag output
 
     --fastqType     [str]       Either "single" or "paired" (default)
 
@@ -56,8 +56,8 @@ if(!params.test){
     exit 1, "Please include one of --sampleCsv or --sampleCat, see --help for format"
   }
 
-  if(!Channel.from(params.runID, checkIfExists: true)){
-      exit 1, "Please include --runID <your_runID>"
+  if(!Channel.from(params.experiment, checkIfExists: true)){
+      exit 1, "Please include --experiment <your_experiment>"
   }
 
   if(!Channel.from(params.fastqType, checkIfExists: true)){
@@ -65,7 +65,7 @@ if(!params.test){
   }
 
   //Global variables based on input
-  params.outDir = "${params.runID}"
+  params.outDir = "${params.experiment}"
 }
 
 //testing
@@ -191,7 +191,6 @@ if(params.fastqType == "paired"){
   }
 
   //collect outputs from above together as need to make single CSV with all
-
   process Link_csv_pe {
 
     label 'low_mem'
@@ -201,13 +200,13 @@ if(params.fastqType == "paired"){
     file(lnks) from lnk_csv.collect()
 
     output:
-    file("${params.runID}.link.csv")
+    file("${params.experiment}.link.csv")
 
     script:
     """
-    echo "'Sample alias','First Fastq File','First Checksum','First Unencrypted checksum','Second Fastq File','Second Checksum','Second Unencrypted checksum'" > ${params.runID}.link.csv
+    echo "'Sample alias','First Fastq File','First Checksum','First Unencrypted checksum','Second Fastq File','Second Checksum','Second Unencrypted checksum'" > ${params.experiment}.link.csv
     ls *lnk.csv | while read LNK; do
-      cat \$LNK >> ${params.runID}.link.csv
+      cat \$LNK >> ${params.experiment}.link.csv
     done
     """
   }
@@ -250,13 +249,13 @@ if(params.fastqType == "single"){
     file(lnks) from lnk_csv.collect()
 
     output:
-    file("${params.runID}.link.csv")
+    file("${params.experiment}.link.csv")
 
     script:
     """
-    echo "'Sample alias','Fastq File','Checksum','Unencrypted checksum'" > ${params.runID}.link.csv
+    echo "'Sample alias','Fastq File','Checksum','Unencrypted checksum'" > ${params.experiment}.link.csv
     ls *lnk.csv | while read LNK; do
-      cat \$LNK >> ${params.runID}.link.csv
+      cat \$LNK >> ${params.experiment}.link.csv
     done
     """
   }
@@ -271,13 +270,13 @@ process Regs_csv {
   file(regs) from reg_csv.collect()
 
   output:
-  file("${params.runID}.regs.csv") into sh_script
+  file("${params.experiment}.regs.csv") into sh_script
 
   script:
   """
-  echo "title,alias,description,subjectId,bioSampleId,caseOrControl,gender,organismPart,cellLine,region,phenotype" > ${params.runID}.regs.csv
+  echo "title,alias,description,subjectId,bioSampleId,caseOrControl,gender,organismPart,cellLine,region,phenotype" > ${params.experiment}.regs.csv
   ls *reg.csv | while read REG; do
-    cat \$REG >> ${params.runID}.regs.csv
+    cat \$REG >> ${params.experiment}.regs.csv
   done
   """
 }
@@ -292,20 +291,20 @@ process Sh_upload {
   file(regs) from sh_script
 
   output:
-  file("${params.runID}.*.sh") into sh_script_out
+  file("${params.experiment}.*.sh") into sh_script_out
 
   script:
   if( params.egaBox && params.egaPass )
     """
-    echo "ASPERA_SCP_PASS=${params.egaPass} ascp -P33001  -O33001 -QT -l300M -L- \$(realpath ../../../${params.outDir})/EGAcrypted/* ${params.egaBox}@fasp.ega.ebi.ac.uk:/." > ${params.runID}.aspera_upload_pass.sh
+    echo "ASPERA_SCP_PASS=${params.egaPass} ascp -P33001  -O33001 -QT -l300M -L- \$(realpath ../../../${params.outDir})/EGAcrypted/* ${params.egaBox}@fasp.ega.ebi.ac.uk:/." > ${params.experiment}.aspera_upload_pass.sh
     """
   else if( params.egaBox && !params.egaPass )
     """
-    echo "ascp -P33001 -O33001 -QT -l300M -L- \$(realpath ../../../${params.outDir})/EGAcrypted/* ${params.egaBox}@fasp.ega.ebi.ac.uk:/." > ${params.runID}.aspera_upload_nopass.sh
+    echo "ascp -P33001 -O33001 -QT -l300M -L- \$(realpath ../../../${params.outDir})/EGAcrypted/* ${params.egaBox}@fasp.ega.ebi.ac.uk:/." > ${params.experiment}.aspera_upload_nopass.sh
     """
   else
     """
-    echo "ascp -P33001 -O33001 -QT -l300M -L- \$(realpath ../../../${params.outDir})/EGAcrypted/* <your_ega_box_ID>@fasp.ega.ebi.ac.uk:/." > ${params.runID}.aspera_upload_nobox_nopass.sh
+    echo "ascp -P33001 -O33001 -QT -l300M -L- \$(realpath ../../../${params.outDir})/EGAcrypted/* <your_ega_box_ID>@fasp.ega.ebi.ac.uk:/." > ${params.experiment}.aspera_upload_nobox_nopass.sh
     """
 }
 
@@ -314,12 +313,12 @@ if(params.email){
   workflow.onComplete {
     sleep(1000)
     def subject = """\
-      [brucemoran/EGAsubmit] SUCCESS: $params.runID [$workflow.runName]
+      [brucemoran/EGAsubmit] SUCCESS: $params.experiment [$workflow.runName]
       """
       .stripIndent()
     if (!workflow.success) {
         subject = """\
-          [brucemoran/EGAsubmit] FAILURE: $params.runID [$workflow.runName]
+          [brucemoran/EGAsubmit] FAILURE: $params.experiment [$workflow.runName]
           """
           .stripIndent()
     }
@@ -327,7 +326,7 @@ if(params.email){
     def msg = """\
       Pipeline execution summary
       ---------------------------
-      RunID       : ${params.runID}
+      experiment  : ${params.experiment}
       RunName     : ${workflow.runName}
       Completed at: ${workflow.complete}
       Duration    : ${workflow.duration}

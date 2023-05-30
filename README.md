@@ -26,11 +26,22 @@ Mandatory parameters:
 
   -profile        [str]       Configuration profile (required: singularity)
 
-  --sampleCsv     [file]      CSV format, headers: sampleID,read1 (option:
-                              add read2 for "paired")
+  --sampleCsv     [file]      CSV format, headers: sampleID,read1,read2;
+                              sampleID is a unique identifier (e.g. sample_1);
+                              read1, read2 are full paths to single gzipped fastqs
+                              (e.g. /path/to/sample_1/read_1.fastq.gz)
 
-  --runID         [str]       Name for run, used to tag output (tip: use the
-                              same as the 'experiment' name in submitter portal)
+  or
+
+  --sampleCat     [file]      CSV format, headers: sampleID,dir,ext;
+                              sampleID is a unique identifier (e.g. sample_1);
+                              dir specifies path to directory in which files to be catted
+                              (e.g. /path/to/sample_1)
+                              ext is the extension to pattern match for read1 fastqs,
+                              if a read2 exists add with a ';' and the pattern to match
+                              (e.g. _1.fastq.gz, or _1.fastq.gz;_2.fastq.gz)
+
+  --experiment    [str]       Run name, as per 'experiment' in EGA, used to tag output
 
   --fastqType     [str]       Either "single" or "paired" (default)
 

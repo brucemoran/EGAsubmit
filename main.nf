@@ -133,7 +133,7 @@ if(params.sampleCat){
   process Samplecat {
 
     label 'low_mem'
-    publishDir "${params.outdir}/samples/${sampleID}/cat", mode: "copy"
+    publishDir "${params.outDir}/samples/${sampleID}/cat", mode: "copy"
 
     input:
     tuple val(sampleID), val(dir), val(ext) from samplecating

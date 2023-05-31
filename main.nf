@@ -200,7 +200,7 @@ if(params.fastqType == "paired"){
     file(lnks) from lnk_csv.collect()
 
     output:
-    file("${params.experiment}.link.csv")
+    file("${params.experiment}.link.csv") into send_link
 
     script:
     """
@@ -249,7 +249,7 @@ if(params.fastqType == "single"){
     file(lnks) from lnk_csv.collect()
 
     output:
-    file("${params.experiment}.link.csv")
+    file("${params.experiment}.link.csv") into send_link
 
     script:
     """
@@ -270,7 +270,7 @@ process Regs_csv {
   file(regs) from reg_csv.collect()
 
   output:
-  file("${params.experiment}.regs.csv") into sh_script
+  file("${params.experiment}.regs.csv") into ( sh_script, send_regs )
 
   script:
   """
@@ -291,7 +291,7 @@ process Sh_upload {
   file(regs) from sh_script
 
   output:
-  file("${params.experiment}.*.sh") into sh_script_out
+  file("${params.experiment}.*.sh") into ( sh_script_out, send_scrp )
 
   script:
   if( params.egaBox && params.egaPass )
@@ -306,6 +306,29 @@ process Sh_upload {
     """
     echo "ascp -P33001 -O33001 -QT -l300M -L- \$(realpath ../../../${params.outDir})/EGAcrypted/* <your_ega_box_ID>@fasp.ega.ebi.ac.uk:/." > ${params.experiment}.aspera_upload_nobox_nopass.sh
     """
+}
+
+// 4.19: ZIP for sending on sendmail
+send_link
+  .mix(send_regs)
+  .mix(send_scrp)
+  .set { sendmail_zip }
+
+process zipup {
+
+  label 'low_mem'
+  publishDir "${params.outDir}/zip", mode: 'copy'
+
+  input:
+  file(send_all) from sendmail_zip.collect()
+
+  output:
+  file("${params.experiment}.EGAsubmit.zip") into send_zip
+
+  script:
+  """
+  zip -r ${params.experiment}.EGAsubmit.zip *
+  """
 }
 
 //Completion e-mail notification
@@ -335,8 +358,11 @@ if(params.email){
       """
       .stripIndent()
 
-    sendMail(to: "${params.email}",
-             subject: subject,
-             body: msg)
+      def attachments = send_zip.toList().getVal()
+
+      sendMail(to: "${params.email}",
+               subject: subject,
+               body: msg,
+               attach: attachments)
   }
 }

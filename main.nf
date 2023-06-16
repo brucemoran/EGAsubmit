@@ -200,13 +200,20 @@ if(params.fastqType == "paired"){
     file(lnks) from lnk_csv.collect()
 
     output:
-    file("${params.experiment}.link.csv") into send_link
+    file("${params.experiment}.*_link.csv") into send_link
 
     script:
     """
-    echo "'Sample alias','First Fastq File','First Checksum','First Unencrypted checksum','Second Fastq File','Second Checksum','Second Unencrypted checksum'" > ${params.experiment}.link.csv
+    echo "'Sample alias','First Fastq File','First Checksum','First Unencrypted checksum','Second Fastq File','Second Checksum','Second Unencrypted checksum'" > ${params.experiment}.paired_link.csv
     ls *lnk.csv | while read LNK; do
-      cat \$LNK >> ${params.experiment}.link.csv
+      cat \$LNK >> ${params.experiment}.paired_link.csv
+    done
+
+    ##also make single read as this seems to work better
+    echo "'Sample alias','Fastq File','Checksum','Unencrypted checksum' > ${params.experiment}.single_link.csv
+    ls *lnk.csv | while read LNK; do
+      echo \$LNK | cut -d"," -f1,2,3,4 >> ${params.experiment}.single_link.csv
+      echo \$LNK | cut -d"," -f1,5,6,7 >> ${params.experiment}.single_link.csv
     done
     """
   }
@@ -316,19 +323,19 @@ send_link
 
 process zipup {
 
-  label 'low_mem'
-  publishDir "${params.outDir}/zip", mode: 'copy'
+    label 'low_mem'
+    publishDir "${params.outDir}/zip", mode: 'copy'
 
-  input:
-  file(send_all) from sendmail_zip.collect()
+    input:
+    file(send_all) from sendmail_zip.collect()
 
-  output:
-  file("${params.experiment}.EGAsubmit.zip") into send_zip
+    output:
+    file("${params.experiment}.EGAsubmit.tar") into send_zip
 
-  script:
-  """
-  zip -r ${params.experiment}.EGAsubmit.zip *
-  """
+    script:
+    """
+    tar -czf ${params.experiment}.EGAsubmit.tar *
+    """
 }
 
 //Completion e-mail notification

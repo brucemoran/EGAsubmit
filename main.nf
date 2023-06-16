@@ -210,7 +210,7 @@ if(params.fastqType == "paired"){
     done
 
     ##also make single read as this seems to work better
-    echo "'Sample alias','Fastq File','Checksum','Unencrypted checksum' > ${params.experiment}.single_link.csv
+    echo "'Sample alias','Fastq File','Checksum','Unencrypted checksum'" > ${params.experiment}.single_link.csv
     ls *lnk.csv | while read LNK; do
       cat \$LNK | cut -d"," -f1,2,3,4 >> ${params.experiment}.single_link.csv
       cat \$LNK | cut -d"," -f1,5,6,7 >> ${params.experiment}.single_link.csv

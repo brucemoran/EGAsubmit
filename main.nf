@@ -366,7 +366,7 @@ process tarup {
     script:
     """
     mkdir tar
-    cp * ./tar/
+    cp *.* ./tar/
     tar -czf ${params.experiment}.${params.runID}.EGAsubmit.tar tar
     """
 }

@@ -15,7 +15,7 @@ def helpMessage() {
 
     --sampleCsv     [file]      CSV format, headers: sampleID,read1,read2;
                                 sampleID is a unique identifier (e.g. sample_1);
-                                read1, read2 are full paths to single gzipped fastqs
+                                read1, read2 are full paths to single gtarped fastqs
                                 (e.g. /path/to/sample_1/read_1.fastq.gz)
 
     or
@@ -34,9 +34,14 @@ def helpMessage() {
 
   Optional parameters:
 
+    --runID         [str]       identifier for run, also tags file output;
+                                allows multiple runs for the same experiment
+
     --egaBox        [str]       ega-box ID (e.g. ega_box_12345)
 
     --egaPass       [str]       ega-box password
+
+    --upload        [bool]      upload to EGA submission portal using credentials
 
     --email         [str]       Email address to send completion notification
 
@@ -65,7 +70,7 @@ if(!params.test){
   }
 
   //Global variables based on input
-  params.outDir = "${params.experiment}"
+  params.outDir = "${params.experiment}/${params.runID}"
 }
 
 //testing
@@ -200,20 +205,20 @@ if(params.fastqType == "paired"){
     file(lnks) from lnk_csv.collect()
 
     output:
-    file("${params.experiment}.*_link.csv") into send_link
+    file("${params.experiment}.${params.runID}.*_link.csv") into send_link
 
     script:
     """
-    echo "'Sample alias','First Fastq File','First Checksum','First Unencrypted checksum','Second Fastq File','Second Checksum','Second Unencrypted checksum'" > ${params.experiment}.paired_link.csv
+    echo "'Sample alias','First Fastq File','First Checksum','First Unencrypted checksum','Second Fastq File','Second Checksum','Second Unencrypted checksum'" > ${params.experiment}.${params.runID}.paired_link.csv
     ls *lnk.csv | while read LNK; do
-      cat \$LNK >> ${params.experiment}.paired_link.csv
+      cat \$LNK >> ${params.experiment}.${params.runID}.paired_link.csv
     done
 
     ##also make single read as this seems to work better
-    echo "'Sample alias','Fastq File','Checksum','Unencrypted checksum'" > ${params.experiment}.single_link.csv
+    echo "'Sample alias','Fastq File','Checksum','Unencrypted checksum'" > ${params.experiment}.${params.runID}.single_link.csv
     ls *lnk.csv | while read LNK; do
-      cat \$LNK | cut -d"," -f1,2,3,4 >> ${params.experiment}.single_link.csv
-      cat \$LNK | cut -d"," -f1,5,6,7 >> ${params.experiment}.single_link.csv
+      cat \$LNK | cut -d"," -f1,2,3,4 >> ${params.experiment}.${params.runID}.single_link.csv
+      cat \$LNK | cut -d"," -f1,5,6,7 >> ${params.experiment}.${params.runID}.single_link.csv
     done
     """
   }
@@ -256,13 +261,13 @@ if(params.fastqType == "single"){
     file(lnks) from lnk_csv.collect()
 
     output:
-    file("${params.experiment}.link.csv") into send_link
+    file("${params.experiment}.${params.runID}.link.csv") into send_link
 
     script:
     """
-    echo "'Sample alias','Fastq File','Checksum','Unencrypted checksum'" > ${params.experiment}.link.csv
+    echo "'Sample alias','Fastq File','Checksum','Unencrypted checksum'" > ${params.experiment}.${params.runID}.link.csv
     ls *lnk.csv | while read LNK; do
-      cat \$LNK >> ${params.experiment}.link.csv
+      cat \$LNK >> ${params.experiment}.${params.runID}.link.csv
     done
     """
   }
@@ -277,13 +282,13 @@ process Regs_csv {
   file(regs) from reg_csv.collect()
 
   output:
-  file("${params.experiment}.regs.csv") into ( sh_script, send_regs )
+  file("${params.experiment}.${params.runID}.regs.csv") into ( sh_script, send_regs )
 
   script:
   """
-  echo "title,alias,description,subjectId,bioSampleId,caseOrControl,gender,organismPart,cellLine,region,phenotype" > ${params.experiment}.regs.csv
+  echo "title,alias,description,subjectId,bioSampleId,caseOrControl,gender,organismPart,cellLine,region,phenotype" > ${params.experiment}.${params.runID}.regs.csv
   ls *reg.csv | while read REG; do
-    cat \$REG >> ${params.experiment}.regs.csv
+    cat \$REG >> ${params.experiment}.${params.runID}.regs.csv
   done
   """
 }
@@ -298,43 +303,71 @@ process Sh_upload {
   file(regs) from sh_script
 
   output:
-  file("${params.experiment}.*.sh") into ( sh_script_out, send_scrp )
+  file("${params.experiment}.${params.runID}.*.sh") into ( sh_script_out, send_scrp, sub_script )
 
   script:
   if( params.egaBox && params.egaPass )
     """
-    echo "ASPERA_SCP_PASS=${params.egaPass} ascp -P33001  -O33001 -QT -l300M -L- \$(realpath ../../../${params.outDir})/EGAcrypted/* ${params.egaBox}@fasp.ega.ebi.ac.uk:/." > ${params.experiment}.aspera_upload_pass.sh
+    echo "ASPERA_SCP_PASS=${params.egaPass} ascp -P33001  -O33001 -QT -l300M -L- \$(realpath ../../../${params.outDir})/EGAcrypted/* ${params.egaBox}@fasp.ega.ebi.ac.uk:/." > ${params.experiment}.${params.runID}.aspera_upload_pass.sh
     """
   else if( params.egaBox && !params.egaPass )
     """
-    echo "ascp -P33001 -O33001 -QT -l300M -L- \$(realpath ../../../${params.outDir})/EGAcrypted/* ${params.egaBox}@fasp.ega.ebi.ac.uk:/." > ${params.experiment}.aspera_upload_nopass.sh
+    echo "ascp -P33001 -O33001 -QT -l300M -L- \$(realpath ../../../${params.outDir})/EGAcrypted/* ${params.egaBox}@fasp.ega.ebi.ac.uk:/." > ${params.experiment}.${params.runID}.aspera_upload_nopass.sh
     """
   else
     """
-    echo "ascp -P33001 -O33001 -QT -l300M -L- \$(realpath ../../../${params.outDir})/EGAcrypted/* <your_ega_box_ID>@fasp.ega.ebi.ac.uk:/." > ${params.experiment}.aspera_upload_nobox_nopass.sh
+    echo "ascp -P33001 -O33001 -QT -l300M -L- \$(realpath ../../../${params.outDir})/EGAcrypted/* <your_ega_box_ID>@fasp.ega.ebi.ac.uk:/." > ${params.experiment}.${params.runID}.aspera_upload_nobox_nopass.sh
     """
 }
 
-// 4.19: ZIP for sending on sendmail
+if(params.upload){
+  process Do_upload {
+
+  label 'low_mem'
+  executor 'local'
+  publishDir path: "${params.outDir}", mode: "copy"
+
+  input:
+  file(sub) from sub_script
+
+  output:
+  file("${params.experiment}.${params.runID}.upload.log") into send_log_out
+
+  script:
+  if( params.egaBox && params.egaPass )
+    """
+    sh ${sub} 2>&1 | tee ${params.experiment}.${params.runID}.upload.log
+    """
+  else
+    """
+    echo "No EGA credentials supplied!" > ${params.experiment}.${params.runID}.upload.log
+    """
+  }
+}
+
+// 4.19: tar for sending on sendmail
 send_link
   .mix(send_regs)
   .mix(send_scrp)
-  .set { sendmail_zip }
+  .mix(send_log_out)
+  .set { sendmail_tar }
 
-process zipup {
+process tarup {
 
     label 'low_mem'
-    publishDir "${params.outDir}/zip", mode: 'copy'
+    publishDir "${params.outDir}/tar", mode: 'copy'
 
     input:
-    file(send_all) from sendmail_zip.collect()
+    file(send_all) from sendmail_tar.collect()
 
     output:
-    file("${params.experiment}.EGAsubmit.tar") into send_zip
+    file("${params.experiment}.${params.runID}.EGAsubmit.tar") into send_tar
 
     script:
     """
-    tar -czf ${params.experiment}.EGAsubmit.tar *
+    mkdir tar
+    cp * ./tar/
+    tar -czf ${params.experiment}.${params.runID}.EGAsubmit.tar tar
     """
 }
 
@@ -357,6 +390,7 @@ if(params.email){
       Pipeline execution summary
       ---------------------------
       experiment  : ${params.experiment}
+      runID       : ${params.runID}
       RunName     : ${workflow.runName}
       Completed at: ${workflow.complete}
       Duration    : ${workflow.duration}
@@ -365,7 +399,7 @@ if(params.email){
       """
       .stripIndent()
 
-      def attachments = send_zip.toList().getVal()
+      def attachments = send_tar.toList().getVal()
 
       sendMail(to: "${params.email}",
                subject: subject,

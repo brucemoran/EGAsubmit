@@ -189,7 +189,7 @@ if(params.fastqType == "paired"){
       -i "${read1},${read2}" \
       -o ./
 
-    echo ",${sampleID},,${sampleID},,NA,unknown,,,," > ${sampleID}.reg.csv
+    echo "${sampleID},,,unknown,${sampleID},${params.runID},NA,,," > ${sampleID}.reg.csv
 
     echo "${sampleID},${read1}.gpg,${read1}.gpg.md5,${read1}.md5,${read2}.gpg,${read2}.gpg.md5,${read2}.md5" > ${sampleID}.lnk.csv
     """
@@ -212,6 +212,11 @@ if(params.fastqType == "paired"){
     echo "'Sample alias','First Fastq File','First Checksum','First Unencrypted checksum','Second Fastq File','Second Checksum','Second Unencrypted checksum'" > ${params.experiment}.${params.runID}.paired_link.csv
     ls *lnk.csv | while read LNK; do
       cat \$LNK >> ${params.experiment}.${params.runID}.paired_link.csv
+    done
+    ##new format
+    echo "'sample','file1','file2'" > ${params.experiment}.${params.runID}.paired_link.csv
+    ls *lnk.csv | while read LNK; do
+      cat \$LNK | cut -d, -f 1,2,5 >> ${params.experiment}.${params.runID}.paired_runs.csv
     done
 
     ##also make single read as this seems to work better
@@ -286,7 +291,7 @@ process Regs_csv {
 
   script:
   """
-  echo "title,alias,description,subjectId,bioSampleId,caseOrControl,gender,organismPart,cellLine,region,phenotype" > ${params.experiment}.${params.runID}.regs.csv
+  echo "alias,title,description,biological_sex,subject_id,phenotype,biosample_id,case_control,organism_part,cell_line" > ${params.experiment}.${params.runID}.regs.csv
   ls *reg.csv | while read REG; do
     cat \$REG >> ${params.experiment}.${params.runID}.regs.csv
   done
@@ -350,24 +355,24 @@ send_link
   .mix(send_regs)
   .mix(send_scrp)
   .mix(send_log_out)
-  .set { sendmail_tar }
+  .set { sendmail_zip }
 
-process tarup {
+process zipup {
 
     label 'low_mem'
-    publishDir "${params.outDir}/tar", mode: 'copy'
+    publishDir "${params.outDir}/zip", mode: 'copy'
 
     input:
-    file(send_all) from sendmail_tar.collect()
+    file(send_all) from sendmail_zip.collect()
 
     output:
-    file("${params.experiment}.${params.runID}.EGAsubmit.tar") into send_tar
+    file("${params.experiment}.${params.runID}.EGAsubmit.zip") into send_zip
 
     script:
     """
-    mkdir tar
-    cp *.* ./tar/
-    tar -czf ${params.experiment}.${params.runID}.EGAsubmit.tar tar
+    mkdir ${params.experiment}_${params.runID}_EGAsubmit
+    cp *.* ./${params.experiment}_${params.runID}_EGAsubmit/
+    zip -r ${params.experiment}.${params.runID}.EGAsubmit.zip ${params.experiment}_${params.runID}_EGAsubmit
     """
 }
 
